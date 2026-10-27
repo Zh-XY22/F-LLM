@@ -1,26 +1,23 @@
-# F-LLM: Monthly source-to-target forecasting
+# F-LLM
 
-This repository contains the runnable AutoTimes-based F-LLM implementation for the fixed M3 Monthly to M4 Monthly task. The source model learns a numeric projection and output projection around a frozen LLaMA-2-7B backbone. A residual observer is then trained from source-only plant outputs and used with feedback factor 1.0 on the target task.
+F-LLM is a control-theoretic framework for time-series forecasting with large language models. This repository provides the complete runnable pipeline for the method: TSF data loading, source plant training, residual-cache construction, observer training, feedback inference, and target evaluation.
 
-## Fixed configuration
+## Repository layout
 
-- Source: M3 Monthly TSF file.
-- Target: M4 Monthly TSF file.
-- Context: 48 values.
-- Numeric patch length: 24 values.
-- Plant: AutoTimes S0, plant seed 2022.
-- Plant projection: 24 -> 512 -> 4096 and 4096 -> 512 -> 24, tanh activation, dropout 0.1.
-- Backbone: frozen LLaMA-2-7B with the AutoTimes numeric projection and output projection.
-- Plant training: SMAPE objective, batch 16, Adam, learning rate 0.00001, weight decay 0, AMP, cosine scheduler with T=10, at most 10 epochs, patience 3, source validation checkpoint selection.
-- Observer: 24 -> 192 -> 24, tanh activation, dropout 0.1, observer seed 2027.
-- Observer training: source residual MSE, batch 256, AdamW, learning rate 0.0005, weight decay 0, cosine scheduler with T=5, exactly 5 epochs.
-- Evaluation: two generated 24-value steps, score the first 18 target values only, report RAW and observer-corrected SMAPE.
+- `fllm/`: F-LLM plant, residual observer, cache, feedback inference, and evaluation code.
+- `autotimes/`: the bundled numeric projection, frozen language-model wrapper, TSF loader, and training utilities required by the released pipeline.
+- `scripts/`: command-line entry point for the complete run and for each individual stage.
+- `config/`: the single reproducibility configuration released with this repository.
 
-The plant uses the same per-context normalization as AutoTimes. The observer receives the normalized historical residual, and its output is rescaled before being added to the plant forecast. Target future values are used only by the final scorer and by source training labels.
+## Released example configuration
 
-## Data and weights
+The only included configuration is `config/monthly_m3_to_m4_h18.json`. It specifies the Monthly M3-to-M4 H18 example used to exercise the complete source-to-target forecasting pipeline. This example is provided for reproducibility and does not restrict the datasets or forecast horizons to which F-LLM can be applied.
 
-Provide standard `.tsf` files through environment variables. The source file must contain M3 Monthly series and the target file must contain the 48,000 M4 Monthly series. Provide the LLaMA checkpoint through `LLAMA_CHECKPOINT`. The data and LLaMA weights are not part of this repository.
+The example uses a 48-value context, 24-value numeric patches, two generated 24-value steps, and scores the first 18 target values. The source plant is trained with a frozen LLaMA-2-7B language model and learnable numeric projection layers. A residual observer is trained from source-only plant outputs and applied through feedback during target inference.
+
+## Data and model checkpoint
+
+The released code reads standard `.tsf` files and does not redistribute datasets or language-model weights. Set the paths used by the released configuration:
 
 ```bash
 export M3_MONTHLY_TSF=/path/to/m3_monthly_dataset.tsf
@@ -28,13 +25,15 @@ export M4_MONTHLY_TSF=/path/to/m4_monthly_dataset.tsf
 export LLAMA_CHECKPOINT=/path/to/llama-2-7b
 ```
 
+The source and target files must match the example configuration, and the checkpoint directory must contain the LLaMA model used by the numeric projection wrapper.
+
 ## Install
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-Use a CUDA-enabled PyTorch installation compatible with the supplied LLaMA checkpoint. The run binds the model to the visible CUDA device selected by the environment.
+Use a CUDA-enabled PyTorch installation compatible with the supplied LLaMA checkpoint.
 
 ## Run
 
@@ -46,9 +45,9 @@ python scripts/run_monthly_m3_to_m4_h18.py \
   --output-dir outputs/monthly_m3_to_m4_h18
 ```
 
-The command trains the source plant, writes its checkpoint, builds the source residual cache, trains the observer, writes the fifth-epoch observer checkpoint, evaluates RAW and corrected forecasts, and writes `test/metrics.json`.
+The complete command trains the source plant, writes its checkpoint, builds the source residual cache, trains the observer, runs RAW and feedback-corrected target inference, and writes `test/metrics.json`.
 
-To run an individual stage after its dependencies exist:
+Individual stages can be run after their dependencies exist:
 
 ```bash
 python scripts/run_monthly_m3_to_m4_h18.py --stage plant
@@ -58,13 +57,12 @@ python scripts/run_monthly_m3_to_m4_h18.py --stage test
 
 ## Outputs
 
-The selected output directory contains the plant training record and checkpoint, source residual arrays and sample keys, observer training metrics and checkpoint, target series keys, RAW and corrected prediction arrays, and `test/metrics.json`. The metrics file records series count, valid point count, SMAPE, MSE, and MAE for both forecast modes.
+The output directory contains the plant training record and checkpoint, source residual arrays and sample keys, observer training metrics and checkpoint, target series keys, RAW and corrected prediction arrays, and `test/metrics.json`. The metrics file records SMAPE, MSE, and MAE for both forecast modes.
 
 ## Attribution
 
-The AutoTimes backbone follows the public AutoTimes implementation and uses its LLaMA numeric projection, frozen language model, output projection, normalization, and training conventions. See the original project and paper for attribution and citation requirements:
+The `autotimes/` directory includes bundled model and data utilities that follow the public AutoTimes implementation. It is included here as an execution component of F-LLM. Please cite and comply with the upstream project when using those components:
 
 ```text
 https://github.com/thuml/AutoTimes
 ```
-
