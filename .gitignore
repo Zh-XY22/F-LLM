@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+data/
+weights/
+outputs/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.npz
+*.tsv
+*.log
+
