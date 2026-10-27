@@ -1,0 +1,19 @@
+{
+  "context": 48,
+  "patch": 24,
+  "forecast": 24,
+  "score_horizon": 18,
+  "encoder_hidden": 512,
+  "encoder_layers": 2,
+  "dropout": 0.1,
+  "plant_seed": 2022,
+  "observer_seed": 2027,
+  "feedback": 1.0,
+  "plant_epochs": 10,
+  "observer_epochs": 5,
+  "batch_size": 16,
+  "learning_rate": 0.00001,
+  "observer_learning_rate": 0.001,
+  "device": "cuda:0"
+}
+
