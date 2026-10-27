@@ -31,7 +31,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.val_loss_min = np.inf
         self.delta = delta
         self.use_multi_gpu = args.use_multi_gpu
         if self.use_multi_gpu:
