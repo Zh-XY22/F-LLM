@@ -1,15 +1,14 @@
 __pycache__/
 *.py[cod]
 .venv/
-data/
-weights/
 outputs/
+data/
 checkpoints/
 *.pt
 *.pth
-*.bin
-*.safetensors
+*.npy
 *.npz
-*.tsv
 *.log
+*.jsonl
+*.partial
 
