@@ -54,32 +54,87 @@ endpoint is epoch5, fixed by source-VAL first18-point forecast SMAPE, not
 selected using target results. This does not change either training objective.
 This runner retains the full20-epoch training schedule.
 
-## Data and Weights
+## Setup
 
-Use **Linux with a CUDA GPU** and a CUDA-compatible PyTorch installation.
-Tested versions and installation notes are in `ENVIRONMENT.md` and
-`requirements.txt`. These files do not install a GPU driver or CUDA toolkit.
-
-Provide standard M3 Monthly and M4 Monthly `.tsf` files and local LLaMA-2-7B
-weights. They are not included. The TSF parser and native source-window loader
-are included. Missing values follow the native removal rule; coordinates after
-removal are recorded. Source TRAIN labels end no later than the source VAL future
-origin. Observer source VAL predicts24 and reports both first18 and full24.
-Target history ends before the final18 labels; those labels are used only for
-scoring. All48000 target series are retained. Padding and validity masks are
-recorded.
+Use **Linux with an NVIDIA CUDA GPU**, Git, curl and Conda. The full pipeline was
+validated on a 32 GiB GPU with Python 3.8.20 and PyTorch 2.0.1 / CUDA 11.7.
+Use the tested Python environment below for these dependency versions.
+See `ENVIRONMENT.md` for platform details; the commands do not install a GPU driver.
 
 ```bash
+git clone https://github.com/Zh-XY22/F-LLM.git
+cd F-LLM
+conda create -n fllm-l2 python=3.8.20 pip -y
+conda activate fllm-l2
 python -m pip install -r requirements.txt
-export M3_MONTHLY_TSF=/your/data/m3_monthly_dataset.tsf
-export M4_MONTHLY_TSF=/your/data/m4_monthly_dataset.tsf
-export LLAMA_CHECKPOINT=/your/models/llama-2-7b
+python -m pip check
 export CUDA_VISIBLE_DEVICES=0
+python -c "import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available(), 'A CUDA-enabled PyTorch installation and working NVIDIA driver are required'"
+CUDA_VISIBLE_DEVICES= python -m unittest discover -s tests
 ```
 
-Use a separate output directory; no output is written into this source tree.
-The same resolved config is recorded once in that output directory and must
-match on subsequent commands. There are no task-level configuration overrides.
+Run the remaining commands from the repository root in the same activated shell.
+The examples keep input data, model weights and run outputs outside the source tree.
+
+## Data and Weights
+
+Download the complete TSF files from the Monash repository:
+
+| Input | Source | Extracted filename | Series |
+|---|---|---|---:|
+| M3 Monthly | [Zenodo](https://zenodo.org/records/4656298) | `m3_monthly_dataset.tsf` | 1,428 |
+| M4 Monthly | [Zenodo](https://zenodo.org/records/4656480) | `m4_monthly_dataset.tsf` | 48,000 |
+
+```bash
+mkdir -p ../fllm-data
+curl --fail --location 'https://zenodo.org/records/4656298/files/m3_monthly_dataset.zip?download=1' --output ../fllm-data/m3_monthly_dataset.zip
+curl --fail --location 'https://zenodo.org/records/4656480/files/m4_monthly_dataset.zip?download=1' --output ../fllm-data/m4_monthly_dataset.zip
+python -m zipfile -e ../fllm-data/m3_monthly_dataset.zip ../fllm-data
+python -m zipfile -e ../fllm-data/m4_monthly_dataset.zip ../fllm-data
+export M3_MONTHLY_TSF="$(cd ../fllm-data && pwd)/m3_monthly_dataset.tsf"
+export M4_MONTHLY_TSF="$(cd ../fllm-data && pwd)/m4_monthly_dataset.tsf"
+```
+
+Keep the final 18 values in each complete TSF series. The evaluation code splits
+them off as target labels. A standalone M4 training CSV or a TSF with the final
+18 values already removed would evaluate a different period.
+
+The TSF parser and source-window loader are included. Missing values follow the
+native removal rule; coordinates after removal are recorded. Source TRAIN labels
+end no later than the source VAL future origin. Observer source VAL predicts 24
+values and reports both the first 18 and full 24. Target history ends before the
+final 18 labels; these labels are used only for scoring. All 48,000 target series
+are retained, with padding and validity masks recorded.
+
+Use the **base [meta-llama/Llama-2-7b-hf](https://huggingface.co/meta-llama/Llama-2-7b-hf)**
+model in Hugging Face format. Obtain access on its model page, then authenticate
+and download it. The Chat model, GGUF files and original Meta `consolidated.*`
+checkpoints are not the model format used by this configuration.
+
+```bash
+huggingface-cli login
+python - <<'PY'
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id="meta-llama/Llama-2-7b-hf",
+    local_dir="../fllm-models/Llama-2-7b-hf",
+    allow_patterns=[
+        "config.json", "generation_config.json", "model*.safetensors",
+        "model.safetensors.index.json", "LICENSE.txt",
+    ],
+)
+PY
+export LLAMA_CHECKPOINT="$(cd ../fllm-models/Llama-2-7b-hf && pwd)"
+```
+
+If matching weights are already available, set `LLAMA_CHECKPOINT` to that absolute
+directory instead. It must contain `config.json` and all weight shards referenced
+by the model index. No separate tokenizer, timestamp embeddings or pretrained
+F-LLM adapter is needed to train from scratch.
+
+Set all three input environment variables before running the public commands.
+Use a new output directory outside this source tree. The same resolved config
+is recorded there and must match on subsequent commands.
 
 ## Train and Test
 
@@ -89,7 +144,13 @@ python scripts/run_monthly.py train-plant --output-dir ../monthly-output
 python scripts/run_monthly.py cache --output-dir ../monthly-output
 python scripts/run_monthly.py train-observer --output-dir ../monthly-output
 python scripts/run_monthly.py evaluate --output-dir ../monthly-output
+python -m json.tool ../monthly-output/tasks/H18_EVALUATION/metrics.json
 ```
+
+Run these five stages in order with the same output directory. `prepare-source`
+creates source arrays and sample keys; `cache` creates residual training data
+from the newly trained plant. `evaluate` automatically loads that plant's best
+source-validation checkpoint and the observer's fixed epoch5 checkpoint.
 
 To test existing matched weights without training:
 
@@ -112,6 +173,11 @@ values). Source validation selected plant epoch2; evaluation used observer epoch
 
 Correction reduces SMAPE and MAE in this configuration, with a small increase
 in MSE. H18 covers one patch, so these results measure single-patch correction.
+
+For the same M3 Monthly to M4 Monthly setting, [paper Table 2](https://arxiv.org/html/2602.12756v2#S6.T2)
+reports F-LLM SMAPE **14.535**. This configuration's validated **13.757228** is
+lower by 0.777772 (about 5.35%). The paper table does not report MSE or MAE for
+this setting, so those two metrics are provided here without a paper comparison.
 
 ## Outputs
 
