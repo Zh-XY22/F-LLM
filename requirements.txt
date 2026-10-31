@@ -1,6 +1,6 @@
-numpy
-pandas
-torch
-transformers
-accelerate
-matplotlib
+numpy==1.23.5
+pandas==1.5.3
+torch==2.0.1
+transformers==4.35.2
+accelerate==1.0.1
+sentencepiece==0.2.0

@@ -1,149 +1,13 @@
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
-import pandas as pd
-import math
-import torch.distributed as dist
-from distutils.util import strtobool
 from datetime import datetime
-plt.switch_backend('agg')
+import pandas as pd
 
 
-def adjust_learning_rate(optimizer, epoch, args):
-    if args.lradj == 'type1':
-        lr_adjust = {epoch: args.learning_rate * (0.5 ** (epoch - 1))}
-    elif args.lradj == 'type2':
-        lr_adjust = {epoch: args.learning_rate * (0.6 ** epoch)}
-    elif args.lradj == "cosine":
-        lr_adjust = {epoch: args.learning_rate /2 * (1 + math.cos(epoch / args.train_epochs * math.pi))}
-
-    if epoch in lr_adjust.keys():
-        lr = lr_adjust[epoch]
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
-        if (args.use_multi_gpu and args.local_rank == 0) or not args.use_multi_gpu:
-            print('next learning rate is {}'.format(lr))
-
-class EarlyStopping:
-    def __init__(self, args, verbose=False, delta=0):
-        self.patience = args.patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-        self.val_loss_min = np.inf
-        self.delta = delta
-        self.use_multi_gpu = args.use_multi_gpu
-        if self.use_multi_gpu:
-            self.local_rank = args.local_rank
-        else:
-            self.local_rank = None
-
-    def __call__(self, val_loss, model, path):
-        score = -val_loss
-        if self.best_score is None:
-            self.best_score = score
-            if self.verbose:
-                if (self.use_multi_gpu and self.local_rank == 0) or not self.use_multi_gpu:
-                    print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).')
-            self.val_loss_min = val_loss
-            if self.use_multi_gpu:
-                if self.local_rank == 0:
-                    self.save_checkpoint(val_loss, model, path)
-                dist.barrier()
-            else:
-                self.save_checkpoint(val_loss, model, path)
-        elif score < self.best_score + self.delta:
-            self.counter += 1
-            if (self.use_multi_gpu and self.local_rank == 0) or not self.use_multi_gpu:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            if self.use_multi_gpu:
-                if self.local_rank == 0:
-                    self.save_checkpoint(val_loss, model, path)
-                dist.barrier()
-            else:
-                self.save_checkpoint(val_loss, model, path)
-            if self.verbose:
-                if (self.use_multi_gpu and self.local_rank == 0) or not self.use_multi_gpu:
-                    print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).')
-            self.val_loss_min = val_loss
-            self.counter = 0
-
-
-    def save_checkpoint(self, val_loss, model, path):
-        param_grad_dic = {
-        k: v.requires_grad for (k, v) in model.named_parameters()
-        }
-        state_dict = model.state_dict()
-        for k in list(state_dict.keys()):
-            if k in param_grad_dic.keys() and not param_grad_dic[k]:
-                # delete parameters that do not require gradient
-                del state_dict[k]
-        torch.save(state_dict, path + '/' + f'checkpoint.pth')
-
-
-
-class dotdict(dict):
-    """dot.notation access to dictionary attributes"""
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-
-class StandardScaler():
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def transform(self, data):
-        return (data - self.mean) / self.std
-
-    def inverse_transform(self, data):
-        return (data * self.std) + self.mean
-
-
-def visual(true, preds=None, name='./pic/test.pdf'):
-    """
-    Results visualization
-    """
-    plt.figure()
-    plt.plot(true, label='GroundTruth', linewidth=2)
-    if preds is not None:
-        plt.plot(preds, label='Prediction', linewidth=2)
-    plt.legend()
-    plt.savefig(name, bbox_inches='tight')
-
-
-def adjustment(gt, pred):
-    anomaly_state = False
-    for i in range(len(gt)):
-        if gt[i] == 1 and pred[i] == 1 and not anomaly_state:
-            anomaly_state = True
-            for j in range(i, 0, -1):
-                if gt[j] == 0:
-                    break
-                else:
-                    if pred[j] == 0:
-                        pred[j] = 1
-            for j in range(i, len(gt)):
-                if gt[j] == 0:
-                    break
-                else:
-                    if pred[j] == 0:
-                        pred[j] = 1
-        elif gt[i] == 0:
-            anomaly_state = False
-        if anomaly_state:
-            pred[i] = 1
-    return gt, pred
-
-
-def cal_accuracy(y_pred, y_true):
-    return np.mean(y_pred == y_true)
+def strtobool(value):
+    """Parse the original TSF boolean spellings without distutils."""
+    value=value.lower()
+    if value in ('y','yes','t','true','on','1'):return 1
+    if value in ('n','no','f','false','off','0'):return 0
+    raise ValueError('invalid truth value %r' % (value,))
 
 def convert_tsf_to_dataframe(
     full_file_path_and_name,
@@ -289,8 +153,3 @@ def convert_tsf_to_dataframe(
             contain_equal_length,
         )
 
-class dotdict(dict):
-    """dot.notation access to dictionary attributes"""
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__

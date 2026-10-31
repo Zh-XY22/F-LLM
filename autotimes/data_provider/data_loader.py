@@ -26,8 +26,8 @@ class Dataset_TSF(Dataset):
         frame, _, _, _, _ = convert_tsf_to_dataframe(
             os.path.join(self.root_path, self.data_path)
         )
-        timeseries = [np.asarray(values[~np.isnan(values)], dtype=np.float32)
-                      for values in frame.series_value]
+        timeseries = [np.asarray(values,dtype=np.float32) for values in frame.series_value]
+        timeseries = [values[~np.isnan(values)] for values in timeseries]
         if self.drop_short:
             timeseries = [values for values in timeseries
                           if values.shape[0] > self.context_len]
@@ -71,4 +71,3 @@ class Dataset_TSF(Dataset):
 
     def __len__(self):
         return self.total_length
-

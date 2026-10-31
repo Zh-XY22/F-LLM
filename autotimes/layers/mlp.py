@@ -40,4 +40,3 @@ class MLP(nn.Module):
         # y:     B x S x f_out
         y = self.layers(x)
         return y
-

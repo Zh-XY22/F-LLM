@@ -1,43 +1,61 @@
 {
+  "method": "F-LLM",
   "source_tsf": "${M3_MONTHLY_TSF}",
   "target_tsf": "${M4_MONTHLY_TSF}",
   "llama_checkpoint": "${LLAMA_CHECKPOINT}",
-  "output_dir": "./outputs/monthly_m3_to_m4_h18",
   "plant_seed": 2022,
   "observer_seed": 2027,
   "plant": {
     "seq_len": 48,
     "label_len": 24,
     "token_len": 24,
-    "test_seq_len": 24,
-    "test_label_len": 0,
-    "test_pred_len": 24,
-    "seasonal_patterns": "Monthly",
     "dropout": 0.1,
     "mlp_hidden_dim": 512,
     "mlp_hidden_layers": 2,
     "mlp_activation": "tanh",
+    "mix_embeds": false,
     "num_workers": 10,
-    "drop_last": false,
-    "val_set_shuffle": false,
-    "drop_short": false,
     "batch_size": 16,
     "train_epochs": 10,
     "patience": 3,
-    "learning_rate": 0.00001,
-    "loss": "SMAPE",
-    "lradj": "type1",
+    "learning_rate": 1e-05,
+    "weight_decay": 0.0,
+    "loss": "PAPER_L2",
     "use_amp": true,
-    "cosine": true,
-    "tmax": 10,
-    "weight_decay": 0,
-    "mix_embeds": false
+    "scheduler_tmax": 10,
+    "scheduler_eta_min": 1e-08
+  },
+  "lipschitz": {
+    "lambda_lip": 418507.34584479616,
+    "kappa": 0.022296765353530645,
+    "radius_multiplier": 0.02,
+    "interior_fraction": 0.5,
+    "denominator_epsilon": 1e-08,
+    "direction_epsilon": 1e-12,
+    "noise_seed": 902021
+  },
+  "observer": {
+    "loss": "L2_PHYSICAL",
+    "epochs": 20,
+    "validation_epochs": [
+      5,
+      10,
+      20
+    ],
+    "selected_epoch": 5,
+    "batch_size": 256,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0,
+    "cosine_epochs": 5,
+    "scheduler_eta_min": 1e-08,
+    "learning_rate_after_cosine": 0.0001
   },
   "evaluation": {
     "generated_points_per_step": 24,
     "scored_points": 18,
     "feedback_factor": 1.0,
-    "smape_epsilon": 0.00000001
+    "alpha": 1.0,
+    "batch_size": 16,
+    "smape_epsilon": 1e-08
   }
 }
-

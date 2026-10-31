@@ -1,2 +1,1 @@
 """Monthly TSF data provider."""
-

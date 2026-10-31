@@ -1,2 +1,0 @@
-"""AutoTimes training experiment."""
-
